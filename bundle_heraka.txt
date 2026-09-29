@@ -1,0 +1,4 @@
+# Haraka bundle. SHA256 is the local tar; frozen EXE uses BUNDLE_URL.
+# BUNDLE_BUNDLED='haraka-bundle-v1.4.tar.gz'
+BUNDLE_SHA256='3db35f83d2e9382b404900ccf748fef161974a9aa990779d1a9377b0417f6987'
+BUNDLE_URL='https://github.com/hi30998946/warship/releases/download/v1.4/haraka-bundle-v1.4.tar.gz'
