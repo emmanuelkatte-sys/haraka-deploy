@@ -84,7 +84,20 @@ exports.hook_data_post = function (next, connection) {
     next();
 };
 
-// Increment local counters on delivery
+const deliveryLogFile = '/root/haraka/logs/delivery.log';
+
+function logDelivery(type, rcpt, resp) {
+    try {
+        if (!fs.existsSync('/root/haraka/logs')) {
+            fs.mkdirSync('/root/haraka/logs', { recursive: true });
+        }
+        const now = new Date().toISOString().replace('T', ' ').substring(0, 19);
+        const line = `[${now}] [${type}] ${rcpt} -> ${resp}\n`;
+        fs.appendFile(deliveryLogFile, line, () => {});
+    } catch (e) {}
+}
+
+// Increment local counters and write audit log on delivery
 exports.hook_delivered = function (next, hmail) {
     try {
         memCounterTotal++;
@@ -94,6 +107,27 @@ exports.hook_delivered = function (next, hmail) {
         } else {
             scheduleFlush();
         }
+        const rcpt = (hmail && hmail.todo && hmail.todo.rcpt_to && hmail.todo.rcpt_to[0]) ? hmail.todo.rcpt_to[0].address() : 'unknown';
+        const resp = (hmail && hmail.response) || '250 2.0.0 OK Delivered';
+        logDelivery('DELIVERED', rcpt, resp);
     } catch (err) {}
+    next();
+};
+
+exports.hook_bounce = function (next, hmail, error) {
+    try {
+        const rcpt = (hmail && hmail.todo && hmail.todo.rcpt_to && hmail.todo.rcpt_to[0]) ? hmail.todo.rcpt_to[0].address() : 'unknown';
+        const resp = (error && error.message) || (hmail && hmail.bounce_error) || '550 Bounce';
+        logDelivery('BOUNCE', rcpt, resp);
+    } catch (e) {}
+    next();
+};
+
+exports.hook_deferred = function (next, hmail, error) {
+    try {
+        const rcpt = (hmail && hmail.todo && hmail.todo.rcpt_to && hmail.todo.rcpt_to[0]) ? hmail.todo.rcpt_to[0].address() : 'unknown';
+        const resp = (error && error.message) || '451 Temporary Deferred';
+        logDelivery('DEFERRED', rcpt, resp);
+    } catch (e) {}
     next();
 };
