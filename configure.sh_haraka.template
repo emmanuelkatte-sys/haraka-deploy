@@ -388,6 +388,20 @@ base64 -d > /root/haraka/config/certificate/privkey_{{DOMAIN}}.pem << 'H13_B64_E
 H13_B64_EOF_PRIVKEY
 chmod 644 /root/haraka/config/certificate/*.pem
 
+if [ ! -s /root/haraka/config/dhparams.pem ]; then
+cat > /root/haraka/config/dhparams.pem << 'EOF'
+-----BEGIN DH PARAMETERS-----
+MIIBCAKCAQEAuTxdiJdN9TYe7sWrE1TjhxYn4zbdTcDIyry9auwvDJN0A34LIril
+pqvkoT/1tqcII9rw+wU3KohEO+xUZ5skBf7+fLEsqnl2QjYT2gq3TFu0MyN30VHn
+bd/KIQqxtTG7+nd+nrFRPLXb/sGeMtfXfXL0ukqVtr8Zpi40AxTR7Mj6IOU0/JIx
+SIMWh5N2chP/hPYNrkVwqhL2a0EsujayeY1oWxuEFWYHXep7pLKY3YxD5G3cAJJl
+eNZkbY21F5/96uSp/PfVLI3EHHA3XLAZacAnm9SbjmdPegXVSzVShm15KbAWz2S+
+Pc662u8uBE+wnVdaXs6WrV74k7gQWvrO5wIBAg==
+-----END DH PARAMETERS-----
+EOF
+chmod 644 /root/haraka/config/dhparams.pem
+fi
+
 # ===== Part 4.6: DKIM 密钥和配置 =====
 mkdir -p /root/haraka/config/dkim/{{FULL_DOMAIN}}
 echo '{{DKIM_SELECTOR}}' > /root/haraka/config/dkim/{{FULL_DOMAIN}}/selector
@@ -492,7 +506,7 @@ for root in (Path("/root/haraka"), Path("/usr/lib"), Path("/usr/local/lib")):
         if "haraka-plugin-dkim" not in str(path).replace("\\", "/"):
             continue
         text = path.read_text(encoding="utf-8")
-        new_text, c = hdr_pat.subn(NEW, text, count=1)
+        new_text, c = hdr_pat.subn(lambda _: NEW, text, count=1)
         if c:
             path.write_text(new_text, encoding="utf-8")
             print(f"patched headers case {path}")
@@ -663,7 +677,6 @@ cat > /root/haraka/plugins/pmta_header_align.js << 'JSEOF'
 // Runs before dkim so the signature covers the stripped header set.
 
 const STRIP = [
-    'Received',
     'x-virtual-mta',
     'X-Virtual-MTA',
     'x-job',
@@ -852,9 +865,11 @@ ExecStart=/usr/bin/node haraka.js
 StandardOutput=append:/root/haraka/logs/smtp.log
 StandardError=append:/root/haraka/logs/error.log
 Restart=always
-RestartSec=10
+RestartSec=3
 TimeoutStartSec=30
-KillMode=process
+TimeoutStopSec=5
+KillSignal=SIGINT
+KillMode=mixed
 LimitNOFILE=1048576
 LimitNPROC=65535
 [Install]
@@ -866,7 +881,12 @@ chmod 644 /etc/systemd/system/haraka.service
 systemctl daemon-reload
 systemctl enable haraka 2>/dev/null || true
 systemctl restart haraka
-sleep 5
+for i in $(seq 1 15); do
+    if systemctl is-active --quiet haraka; then
+        break
+    fi
+    sleep 2
+done
 
 # 检查服务状态
 if ! systemctl is-active --quiet haraka; then

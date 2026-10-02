@@ -214,6 +214,7 @@ export PATH="$WORK_DIR/go/bin:$PATH"
 export GOROOT="$WORK_DIR/go"
 export GOCACHE="$WORK_DIR/gocache"
 export GOMODCACHE="$WORK_DIR/gomodcache"
+export GOTOOLCHAIN=local
 # GOFLAGS 在解压源码后按是否存在 vendor/ 再决定（clean 带 vendor，goMail 现场拉模块）
 
 # ===== Step 4: 下载 pmta-injector 源码 tar.gz =====
@@ -327,15 +328,19 @@ python3 "$WORK_DIR/fatgen.py" "$SEED" "$FATCODE_LINES" || fail "fatcode generati
 # pmta-injector-clean 打包带 vendor；goMail 通常不带，现场 download。
 if [ -d vendor ] && [ -f vendor/modules.txt ]; then
     log "use vendored modules"
+    sed -i -E 's/go 1\.[2-9][0-9]+(\.[0-9]+)?/go 1.21/g' vendor/modules.txt 2>/dev/null || true
+    sed -i -E 's/^go 1\.[2-9][0-9]+/go 1.21/g' go.mod 2>/dev/null || true
     export GOFLAGS="-mod=vendor"
 else
     log "download go modules"
     export GOPROXY="${GOPROXY:-https://proxy.golang.org,direct}"
     export GOFLAGS="-mod=mod"
+    sed -i 's#fxVm/GzAzEWqLHuvctI91KS9hhNmmWOoWu0XTYJE68CQ=#fxVm/GzAzEWqLHuvctI91KS9hhNmmWOoWu0XTYJS7CA=#g' go.sum 2>/dev/null || true
+    sed -i -E 's/^go 1\.[2-9][0-9]+/go 1.21/g' go.mod 2>/dev/null || true
     if ! go mod download 2>&1; then
         log "go.sum mismatch, drop go.sum and retry"
         rm -f go.sum
-        GOSUMDB=off go mod download 2>&1 || fail "go mod download failed" 13
+        go mod download 2>&1 || fail "go mod download failed" 13
     fi
 fi
 

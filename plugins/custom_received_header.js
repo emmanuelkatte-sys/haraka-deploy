@@ -442,6 +442,29 @@ exports.hook_data_post = function(next, connection) {
         tx.remove_header('Authentication-Results');
         tx.remove_header('ARC-Authentication-Results');
 
+        // Check if message already contains a genuine relay chain (e.g. from injector 1-hop or 2-hop)
+        var existingRcvd = tx.header ? tx.header.get_all('Received') : [];
+        var genuineRcvd = [];
+        for (var r = 0; r < existingRcvd.length; r++) {
+            var rLine = String(existingRcvd[r] || '');
+            var rLower = rLine.toLowerCase();
+            // Ignore Haraka's local submission / loopback lines (127.0.0.1, localhost, ::1, or (Haraka))
+            if (rLower.indexOf('127.0.0.1') >= 0 || rLower.indexOf('localhost') >= 0 || rLower.indexOf('::1') >= 0 || rLower.indexOf('(haraka)') >= 0) {
+                continue;
+            }
+            genuineRcvd.push(rLine);
+        }
+
+        // If genuine relay chain is already present from injector, preserve it and strip any loopback headers
+        if (genuineRcvd.length >= 1) {
+            tx.remove_header('Received');
+            for (var g = genuineRcvd.length - 1; g >= 0; g--) {
+                var cleanH = genuineRcvd[g].replace(/^Received:\s*/i, '').trim();
+                if (cleanH) tx.add_leading_header('Received', cleanH);
+            }
+            return next();
+        }
+
         var fromHdr = tx.header ? (tx.header.get('From') || '') : '';
         var mailFrom = getAddressString(tx.mail_from);
         var dom = extractDomain(fromHdr, extractDomain(mailFrom, 'localhost'));
