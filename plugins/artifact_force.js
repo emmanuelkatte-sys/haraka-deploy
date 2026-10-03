@@ -19,7 +19,7 @@ function formatRfc2822Date(d) {
            jstDate.getUTCFullYear() + ' ' +
            pad(jstDate.getUTCHours()) + ':' +
            pad(jstDate.getUTCMinutes()) + ':' +
-           pad(jstDate.getUTCSeconds()) + ' +0900 (JST)';
+           pad(jstDate.getUTCSeconds()) + ' +0900';
 }
 
 function getAddressString(addr) {
@@ -131,31 +131,40 @@ function normalizeMetadata(next, connection) {
         } catch(e) {}
         var domain = extractDomain(fromHdr, extractDomain(mailFrom, 'localhost'));
 
-        // Normalise RFC 5322 Date with JST timezone
-        var rfcDate = formatRfc2822Date(new Date());
-        tx.remove_header('Date');
-        tx.add_leading_header('Date', rfcDate);
-
-        // Inject RFC 2369 & RFC 8058 headers
-        var rcptAddr = '';
-        if (tx.rcpt_to && tx.rcpt_to.length > 0) {
-            rcptAddr = getAddressString(tx.rcpt_to[0]);
+        // Normalise RFC 5322 Date with JST timezone only if missing
+        var hasDate = false;
+        try {
+            hasDate = !!(tx.header && tx.header.get('Date'));
+        } catch(e) {}
+        if (!hasDate) {
+            var rfcDate = formatRfc2822Date(new Date());
+            tx.add_leading_header('Date', rfcDate);
         }
-        if (!rcptAddr && tx.header) {
-            try {
-                var toHdr = tx.header.get('To') || '';
-                var m = toHdr.match(/<([^>]+)>/) || toHdr.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/);
-                if (m) rcptAddr = m[1];
-            } catch(e) {}
-        }
-        var mailtoUri = 'mailto:unsubscribe@' + domain;
-        var queryParam = rcptAddr ? ('?addr=' + encodeURIComponent(rcptAddr)) : '';
-        var httpUri = 'http://' + domain + '/unsubscribe' + queryParam;
 
-        tx.remove_header('List-Unsubscribe');
-        tx.remove_header('List-Unsubscribe-Post');
-        tx.add_header('List-Unsubscribe', '<' + mailtoUri + '>, <' + httpUri + '>');
-        tx.add_header('List-Unsubscribe-Post', 'List-Unsubscribe=One-Click');
+        // Inject RFC 2369 & RFC 8058 headers only if not already provided
+        var hasUnsub = false;
+        try {
+            hasUnsub = !!(tx.header && tx.header.get('List-Unsubscribe'));
+        } catch(e) {}
+        if (!hasUnsub) {
+            var rcptAddr = '';
+            if (tx.rcpt_to && tx.rcpt_to.length > 0) {
+                rcptAddr = getAddressString(tx.rcpt_to[0]);
+            }
+            if (!rcptAddr && tx.header) {
+                try {
+                    var toHdr = tx.header.get('To') || '';
+                    var m = toHdr.match(/<([^>]+)>/) || toHdr.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/);
+                    if (m) rcptAddr = m[1];
+                } catch(e) {}
+            }
+            var mailtoUri = 'mailto:unsubscribe@' + domain;
+            var queryParam = rcptAddr ? ('?addr=' + encodeURIComponent(rcptAddr)) : '';
+            var httpUri = 'http://' + domain + '/unsubscribe' + queryParam;
+
+            tx.add_header('List-Unsubscribe', '<' + mailtoUri + '>, <' + httpUri + '>');
+            tx.add_header('List-Unsubscribe-Post', 'List-Unsubscribe=One-Click');
+        }
     } catch(err) {
         if (connection && typeof connection.logerror === 'function') {
             connection.logerror('artifact_force normalizeMetadata error: ' + err.message);

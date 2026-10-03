@@ -229,21 +229,20 @@ else
 fi
 echo "$SRC_TAR_SHA256  src.tar.gz" | sha256sum -c --quiet \
     || fail "source sha256 mismatch" 12
-tar -xzf src.tar.gz || fail "source extract failed" 12
+mkdir -p "$WORK_DIR/src"
+tar -xzf src.tar.gz -C "$WORK_DIR/src" || fail "source extract failed" 12
 rm -f src.tar.gz
 
 # 解析源码目录：兼容 pmta-injector-clean/、pmta-injector/、或解压到当前目录。
-# 必须跳过 Step 3 解压出的 Go 工具链目录 ./go
 resolve_src_dir() {
-    if [ -f ./go.mod ] && [ -f ./main.go ]; then
-        echo "."
+    if [ -f "$WORK_DIR/src/go.mod" ] && [ -f "$WORK_DIR/src/main.go" ]; then
+        echo "$WORK_DIR/src"
         return 0
     fi
     local d
-    for d in ./*/; do
+    for d in "$WORK_DIR/src"/*/; do
         d="${d%/}"
         [ -d "$d" ] || continue
-        [ "$d" = "./go" ] || [ "$d" = "go" ] && continue
         if [ -f "$d/go.mod" ] && [ -f "$d/main.go" ]; then
             echo "$d"
             return 0
@@ -263,7 +262,7 @@ resolve_src_dir() {
 }
 SRC_DIR="$(resolve_src_dir)" || {
     log "extract listing:"
-    ls -la >&2 || true
+    ls -la "$WORK_DIR/src" >&2 || true
     fail "source dir not found after extract (tar must contain go.mod + main.go)" 12
 }
 log "source dir: $SRC_DIR"
@@ -275,7 +274,7 @@ cd "$SRC_DIR"
 log "apply variant placeholders"
 # 5.1 替换 Go module 路径（__MODULE_PLACEHOLDER__ → 随机 module/core）
 sed -i "s|__MODULE_PLACEHOLDER__|${VAR_MODULE_NAME}|g" go.mod
-find . -name "*.go" -not -path "./vendor/*" -exec \
+find . -type f -name "*.go" -not -path "./vendor/*" -not -path "./go/*" -not -path "./gocache/*" -not -path "./gomodcache/*" -exec \
     sed -i "s|__MODULE_PLACEHOLDER__|${VAR_MODULE_NAME}|g" {} +
 # 5.2 写入版本/build 元数据到 main.go
 sed -i "s|__VERSION_PLACEHOLDER__|${VAR_VERSION}|g" main.go
