@@ -200,7 +200,7 @@ systemctl daemon-reload 2>/dev/null || true
 
 # ===== Part 3: 下载并解压 Haraka Bundle =====
 BUNDLE_URL='https://github.com/emmanuelkatte-sys/haraka-deploy/releases/download/v1.4/haraka-bundle-v1.4.tar.gz'
-BUNDLE_SHA256='f761d668b4fe251612043ff8faf6f297298ed1737322c7bb582a0d32258d5ad7'
+BUNDLE_SHA256='3db35f83d2e9382b404900ccf748fef161974a9aa990779d1a9377b0417f6987'
 
 
 # 停止可能存在的 Haraka（防止覆盖运行中的文件），并停掉 PMTA 等占用 25/587 的邮局
