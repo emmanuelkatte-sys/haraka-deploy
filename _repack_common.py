@@ -32,26 +32,39 @@ def write_kv(path: Path, lines: list[str]) -> None:
     path.write_text(text, encoding="utf-8")
 
 
-WARSHIP_RELEASE = "https://github.com/hi30998946/warship/releases/download/v1.4"
+REPO_BASE = "https://github.com/emmanuelkatte-sys"
+
+BUNDLE_REPO_MAP = {
+    "haraka-bundle-v1.4.tar.gz": "haraka-deploy",
+    "zonemta-bundle-v1.4.tar.gz": "zonemta-deploy",
+    "pmta-bundle-v1.4.tar.gz": "pmta-deploy",
+    "pmta-injector-v1.4.tar.gz": "pmta-injector",
+    "gomail-injector-v1.4.tar.gz": "gomail-injector",
+    "phpmailer-injector-v1.4.tar.gz": "phpmailer-injector",
+}
 
 
 def write_bundle_meta(path: Path, *, title: str, bundled: str, sha256: str) -> None:
     """Same keys for PMTA / Haraka / ZonePMTA: SHA256 + GitHub URL; BUNDLED commented (not in exe)."""
+    repo = BUNDLE_REPO_MAP.get(bundled, "haraka-deploy")
+    url = f"{REPO_BASE}/{repo}/releases/download/v1.4/{bundled}"
     write_kv(path, [
         f"# {title}",
         f"# BUNDLE_BUNDLED='{bundled}'",
         f"BUNDLE_SHA256='{sha256}'",
-        f"BUNDLE_URL='{WARSHIP_RELEASE}/{bundled}'",
+        f"BUNDLE_URL='{url}'",
     ])
 
 
 def write_injector_meta(path: Path, *, title: str, bundled: str, sha256: str) -> None:
     """Same keys for GO / goMail / phpMailer source meta."""
+    repo = BUNDLE_REPO_MAP.get(bundled, "phpmailer-injector")
+    url = f"{REPO_BASE}/{repo}/releases/download/v1.4/{bundled}"
     write_kv(path, [
         f"# {title}",
         f"# INJECTOR_SOURCE_BUNDLED='{bundled}'",
         f"INJECTOR_SOURCE_SHA256='{sha256}'",
-        f"INJECTOR_SOURCE_URL='{WARSHIP_RELEASE}/{bundled}'",
+        f"INJECTOR_SOURCE_URL='{url}'",
     ])
 
 
