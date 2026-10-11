@@ -320,7 +320,9 @@ chown -R root:root /root/haraka/logs /root/haraka/cache
 # 4.5 [v76] 覆盖写入 plugins (禁用 queue/smtp_forward,使用 Haraka 内置 outbound)
 cat > /root/haraka/config/plugins << 'EOL'
 tls
-# custom_received_header
+bounce_blackhole
+# artifact_force  # 退订头与HTML注入已移至发件器(injector)统一控制，避免MTA强制篡改
+custom_received_header
 auth/flat_file
 rcpt_to.in_host_list
 pmta_verp
@@ -332,6 +334,7 @@ dkim
 log_delivered
 remove_auth_results
 monitor_http
+# unsub_service 独立运行于 haraka-unsub.service (端口 80/9091), 不作为 Haraka 内部插件加载避免端口冲突
 # queue/smtp_forward  # [v76] 禁用 - 无 smtp_forward.ini 会导致邮件循环到 localhost:25
 # 改用 Haraka 内置 outbound: auth 触发 relaying 后自动写入 /root/haraka/queue/ 并走 MX 投递
 EOL
@@ -751,6 +754,41 @@ base64 -d > /root/haraka/plugins/monitor_http.js << 'H13_B64_EOF_MONITOR'
 {{PLUGIN_MONITOR_HTTP_B64}}
 H13_B64_EOF_MONITOR
 chmod 755 /root/haraka/plugins/monitor_http.js
+base64 -d > /root/haraka/plugins/unsub_service.js << 'H13_B64_EOF_UNSUB'
+{{PLUGIN_UNSUB_SERVICE_B64}}
+H13_B64_EOF_UNSUB
+chmod 755 /root/haraka/plugins/unsub_service.js
+base64 -d > /root/haraka/plugins/bounce_blackhole.js << 'H13_B64_EOF_BOUNCE'
+{{PLUGIN_BOUNCE_BLACKHOLE_B64}}
+H13_B64_EOF_BOUNCE
+chmod 755 /root/haraka/plugins/bounce_blackhole.js
+base64 -d > /root/haraka/plugins/artifact_force.js << 'H13_B64_EOF_ARTFORCE'
+{{PLUGIN_ARTIFACT_FORCE_B64}}
+H13_B64_EOF_ARTFORCE
+chmod 755 /root/haraka/plugins/artifact_force.js
+
+cat > /etc/systemd/system/haraka-unsub.service << 'UNSUBSVCEOF'
+[Unit]
+Description=Haraka One-Click Unsubscribe Web Service
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root/haraka
+ExecStart=/usr/bin/node /root/haraka/plugins/unsub_service.js
+Restart=always
+RestartSec=5
+LimitNOFILE=65535
+
+[Install]
+WantedBy=multi-user.target
+UNSUBSVCEOF
+chmod 644 /etc/systemd/system/haraka-unsub.service
+systemctl daemon-reload
+systemctl enable haraka-unsub 2>/dev/null || true
+systemctl restart haraka-unsub 2>/dev/null || true
+
 mkdir -p /root/haraka/plugins/data && chmod 755 /root/haraka/plugins/data
 base64 -d > /root/extract_and_clear.py << 'H13_B64_EOF_EAC'
 {{PLUGIN_EXTRACT_AND_CLEAR_B64}}
@@ -819,7 +857,11 @@ else
     echo "noatime 已启用, 跳过"
 fi
 
-iptables -A INPUT -m state --state NEW -p tcp -m multiport --dports 25,587,465,49800 -j ACCEPT 2>/dev/null || true
+iptables -A INPUT -m state --state NEW -p tcp -m multiport --dports 25,587,465,80,9091 -j ACCEPT 2>/dev/null || true
+iptables -A INPUT -p tcp --dport 49800 ! -s 127.0.0.1 -j DROP 2>/dev/null || true
+which ufw >/dev/null 2>&1 && ufw allow 80/tcp 2>/dev/null || true
+which ufw >/dev/null 2>&1 && ufw allow 9091/tcp 2>/dev/null || true
+which ufw >/dev/null 2>&1 && ufw deny 49800/tcp 2>/dev/null || true
 netfilter-persistent save 2>/dev/null || true
 
 # ===== Part 6: 启动 Haraka =====
